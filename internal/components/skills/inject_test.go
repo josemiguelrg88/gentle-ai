@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gentleman-programming/gentle-ai/internal/agents"
@@ -129,6 +130,55 @@ func TestInjectSkipsUnknownSkillGracefully(t *testing.T) {
 
 	if result.Skipped[0] != "nonexistent-skill" {
 		t.Fatalf("Inject() skipped[0] = %q, want nonexistent-skill", result.Skipped[0])
+	}
+}
+
+func TestInjectCopiesSkillAssets(t *testing.T) {
+	home := t.TempDir()
+
+	result, err := Inject(home, claudeAdapter(), []model.SkillID{model.SkillSpringBootBackend})
+	if err != nil {
+		t.Fatalf("Inject() error = %v", err)
+	}
+	if !result.Changed {
+		t.Fatalf("Inject() changed = false")
+	}
+
+	wantFiles := []string{
+		filepath.Join(home, ".claude", "skills", "springboot-backend", "SKILL.md"),
+		filepath.Join(home, ".claude", "skills", "springboot-backend", "assets", "unit-service-test.java"),
+		filepath.Join(home, ".claude", "skills", "springboot-backend", "assets", "webmvc-controller-test.java"),
+		filepath.Join(home, ".claude", "skills", "springboot-backend", "assets", "integration-test.java"),
+	}
+
+	if len(result.Files) != len(wantFiles) {
+		t.Fatalf("Inject() files len = %d, want %d (%v)", len(result.Files), len(wantFiles), result.Files)
+	}
+
+	for _, path := range wantFiles {
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatalf("expected installed file %q: %v", path, readErr)
+		}
+		if len(content) == 0 {
+			t.Fatalf("installed file %q is empty", path)
+		}
+	}
+
+	assetContent, err := os.ReadFile(filepath.Join(home, ".claude", "skills", "springboot-backend", "assets", "unit-service-test.java"))
+	if err != nil {
+		t.Fatalf("ReadFile(unit asset) error = %v", err)
+	}
+	if !strings.Contains(string(assetContent), "@DisplayName") {
+		t.Fatalf("unit-service-test.java should include @DisplayName; got:\n%s", string(assetContent))
+	}
+
+	second, err := Inject(home, claudeAdapter(), []model.SkillID{model.SkillSpringBootBackend})
+	if err != nil {
+		t.Fatalf("Inject() second error = %v", err)
+	}
+	if second.Changed {
+		t.Fatalf("Inject() second changed = true")
 	}
 }
 

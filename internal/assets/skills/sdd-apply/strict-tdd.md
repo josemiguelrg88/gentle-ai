@@ -349,6 +349,18 @@ expect(screen.getByRole("button")).toBeDisabled();
 2. OR use a visual regression tool / E2E screenshot comparison
 3. NEVER assert specific Tailwind/CSS class names — they are implementation details
 
+## Backend/Spring Boot TDD Layering
+
+For Java/Spring Boot projects, apply the stack skill (`springboot-backend`) and keep the TDD layer appropriate:
+- Unit/service/domain tests: use Mockito for external collaborators.
+- Controller tests: prefer MVC tests (`@WebMvcTest`) for request/response, validation, HTTP status, serialization, and error handling.
+- Repository tests: use `@DataJpaTest` when JPA mappings, queries, projections, or specifications matter.
+- Service tests may use `@DataJpaTest` only when real persistence/JPA behavior is the purpose; otherwise use unit tests with Mockito.
+- Full integration tests use `@SpringBootTest` under `src/test-integration`, not unit/slice test folders.
+- Group tests with `@Nested` by use case or feature, with isolated data per use case.
+- Add `@DisplayName` descriptions based on the current ticket, branch, or user-chosen SDD definition.
+- Maven: Surefire for unit/slice, Failsafe for integration, JaCoCo for both.
+
 ## Rules (Strict TDD specific)
 
 - NEVER write production code before writing its test — this is the ONE rule that cannot be broken

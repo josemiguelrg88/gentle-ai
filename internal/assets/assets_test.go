@@ -104,6 +104,10 @@ func TestAllEmbeddedAssetsAreReadable(t *testing.T) {
 
 		// Foundation skills
 		"skills/go-testing/SKILL.md",
+		"skills/springboot-backend/SKILL.md",
+		"skills/springboot-backend/assets/unit-service-test.java",
+		"skills/springboot-backend/assets/webmvc-controller-test.java",
+		"skills/springboot-backend/assets/integration-test.java",
 		"skills/skill-creator/SKILL.md",
 	}
 
@@ -283,9 +287,9 @@ func TestEmbeddedAssetCount(t *testing.T) {
 		}
 	}
 
-	// We expect 17 skill directories (10 SDD + judgment-day + 5 foundation + _shared).
-	if skillDirs != 17 {
-		t.Fatalf("expected 17 skill directories, got %d", skillDirs)
+	// We expect 18 skill directories (10 SDD + judgment-day + 6 foundation/backend + _shared).
+	if skillDirs != 18 {
+		t.Fatalf("expected 18 skill directories, got %d", skillDirs)
 	}
 
 	// Verify each skill directory has a SKILL.md.

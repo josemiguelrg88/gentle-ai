@@ -34,6 +34,8 @@ Map file patterns to skills from the registry (common examples — always defer 
 - `app/**`, `pages/**` → nextjs/angular/framework skills
 - `.py` → python/django skills
 - `.go` → go skills
+- `pom.xml`, `build.gradle`, `build.gradle.kts`, `*.java`, `src/main/java/**` → Java/Spring skills such as `springboot-backend`
+- `@SpringBootApplication`, `@RestController`, Spring Boot Maven/Gradle plugins → `springboot-backend`
 - `*.test.*`, `*.spec.*` → testing skills
 - Style files → tailwind/css skills
 
@@ -45,6 +47,7 @@ Use the `Trigger` field in the registry's User Skills table to match. Skills who
 |-----------------|------------------------------------------|
 | Create a PR | "PR", "pull request" |
 | Write/review code | The specific framework/language |
+| Spring Boot backend work | "Spring Boot", "Java", "backend", "Maven", "Gradle", "JPA", "REST controller" |
 | Create Jira tickets | "Jira", "epic", "task" |
 | Write Notion docs | "Notion", "RFC", "PRD" |
 | Write comments | "comment" |

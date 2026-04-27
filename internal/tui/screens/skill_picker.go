@@ -26,6 +26,7 @@ var sddSkillIDs = []model.SkillID{
 // foundationSkillIDs are the baseline/learning skills shown in the second group.
 var foundationSkillIDs = []model.SkillID{
 	model.SkillGoTesting,
+	model.SkillSpringBootBackend,
 	model.SkillCreator,
 	model.SkillBranchPR,
 	model.SkillIssueCreation,
@@ -33,21 +34,22 @@ var foundationSkillIDs = []model.SkillID{
 
 // skillLabels maps each SkillID to a human-readable display label.
 var skillLabels = map[model.SkillID]string{
-	model.SkillSDDInit:       "SDD Init",
-	model.SkillSDDExplore:    "SDD Explore",
-	model.SkillSDDPropose:    "SDD Propose",
-	model.SkillSDDSpec:       "SDD Spec",
-	model.SkillSDDDesign:     "SDD Design",
-	model.SkillSDDTasks:      "SDD Tasks",
-	model.SkillSDDApply:      "SDD Apply",
-	model.SkillSDDVerify:     "SDD Verify",
-	model.SkillSDDArchive:    "SDD Archive",
-	model.SkillSDDOnboard:    "SDD Onboard",
-	model.SkillJudgmentDay:   "Judgment Day",
-	model.SkillGoTesting:     "Go Testing",
-	model.SkillCreator:       "Skill Creator",
-	model.SkillBranchPR:      "Branch & PR",
-	model.SkillIssueCreation: "Issue Creation",
+	model.SkillSDDInit:           "SDD Init",
+	model.SkillSDDExplore:        "SDD Explore",
+	model.SkillSDDPropose:        "SDD Propose",
+	model.SkillSDDSpec:           "SDD Spec",
+	model.SkillSDDDesign:         "SDD Design",
+	model.SkillSDDTasks:          "SDD Tasks",
+	model.SkillSDDApply:          "SDD Apply",
+	model.SkillSDDVerify:         "SDD Verify",
+	model.SkillSDDArchive:        "SDD Archive",
+	model.SkillSDDOnboard:        "SDD Onboard",
+	model.SkillJudgmentDay:       "Judgment Day",
+	model.SkillGoTesting:         "Go Testing",
+	model.SkillSpringBootBackend: "Spring Boot Backend",
+	model.SkillCreator:           "Skill Creator",
+	model.SkillBranchPR:          "Branch & PR",
+	model.SkillIssueCreation:     "Issue Creation",
 }
 
 // SkillPickerOptions returns the action buttons shown after the skill checkboxes.

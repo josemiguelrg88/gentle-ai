@@ -2,6 +2,7 @@ package skills
 
 import (
 	"fmt"
+	"io/fs"
 	"log"
 	"path/filepath"
 	"strings"
@@ -25,18 +26,19 @@ type InjectionResult struct {
 	Skipped []model.SkillID
 }
 
-// Inject writes the embedded SKILL.md files for each requested skill
-// to the correct directory for the given agent adapter.
+// Inject writes the embedded skill directory for each requested skill to the
+// correct directory for the given agent adapter. This includes SKILL.md and any
+// supporting files such as assets/ templates.
 //
-// The skills directory is determined by adapter.SkillsDir(), removing
-// the need for any agent-specific switch statements.
+// The skills directory is determined by adapter.SkillsDir(), removing the need
+// for any agent-specific switch statements.
 //
-// SDD skills (those whose IDs begin with "sdd-") are intentionally skipped
-// here because the SDD component installs them as part of its own injection.
-// This prevents a write conflict when both components are selected together.
+// SDD skills (those whose IDs begin with "sdd-") are intentionally skipped here
+// because the SDD component installs them as part of its own injection. This
+// prevents a write conflict when both components are selected together.
 //
-// Individual skill failures (e.g., missing embedded asset) are logged
-// and skipped rather than aborting the entire operation.
+// Individual skill failures (e.g., missing embedded asset) are logged and
+// skipped rather than aborting the entire operation.
 func Inject(homeDir string, adapter agents.Adapter, skillIDs []model.SkillID) (InjectionResult, error) {
 	if !adapter.SupportsSkills() {
 		return InjectionResult{Skipped: skillIDs}, nil
@@ -57,28 +59,68 @@ func Inject(homeDir string, adapter agents.Adapter, skillIDs []model.SkillID) (I
 			continue
 		}
 
-		assetPath := "skills/" + string(id) + "/SKILL.md"
-		content, readErr := assets.Read(assetPath)
-		if readErr != nil {
-			log.Printf("skills: skipping %q — embedded asset not found: %v", id, readErr)
+		assetRoot := "skills/" + string(id)
+		if _, readErr := assets.FS.ReadDir(assetRoot); readErr != nil {
+			log.Printf("skills: skipping %q — embedded asset directory not found: %v", id, readErr)
 			skipped = append(skipped, id)
 			continue
 		}
-		if len(content) == 0 {
-			return InjectionResult{}, fmt.Errorf("skill %q: embedded asset exists but is empty — build may be corrupt", id)
-		}
 
-		path := filepath.Join(skillDir, string(id), "SKILL.md")
-		writeResult, writeErr := filemerge.WriteFileAtomic(path, []byte(content), 0o644)
+		written, skillChanged, writeErr := writeEmbeddedSkillDir(assetRoot, filepath.Join(skillDir, string(id)))
 		if writeErr != nil {
 			return InjectionResult{}, fmt.Errorf("skill %q: write failed: %w", id, writeErr)
 		}
 
-		changed = changed || writeResult.Changed
-		paths = append(paths, path)
+		changed = changed || skillChanged
+		paths = append(paths, written...)
 	}
 
 	return InjectionResult{Changed: changed, Files: paths, Skipped: skipped}, nil
+}
+
+func writeEmbeddedSkillDir(assetRoot, targetRoot string) ([]string, bool, error) {
+	written := make([]string, 0)
+	changed := false
+	sawSkillFile := false
+
+	err := fs.WalkDir(assets.FS, assetRoot, func(walkPath string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		rel := strings.TrimPrefix(walkPath, assetRoot+"/")
+		if rel == "SKILL.md" {
+			sawSkillFile = true
+		}
+
+		content, err := assets.FS.ReadFile(walkPath)
+		if err != nil {
+			return err
+		}
+		if rel == "SKILL.md" && len(content) == 0 {
+			return fmt.Errorf("embedded SKILL.md exists but is empty — build may be corrupt")
+		}
+
+		targetPath := filepath.Join(targetRoot, filepath.FromSlash(rel))
+		writeResult, err := filemerge.WriteFileAtomic(targetPath, content, 0o644)
+		if err != nil {
+			return err
+		}
+
+		changed = changed || writeResult.Changed
+		written = append(written, targetPath)
+		return nil
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if !sawSkillFile {
+		return nil, false, fmt.Errorf("embedded skill directory missing SKILL.md")
+	}
+	return written, changed, nil
 }
 
 // SkillPathForAgent returns the filesystem path where a skill file would be written.

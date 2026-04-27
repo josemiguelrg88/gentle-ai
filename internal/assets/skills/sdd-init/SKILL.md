@@ -42,9 +42,20 @@ You are an EXECUTOR for this phase, not the orchestrator. Do the initialization 
 ### Step 1: Detect Project Context
 
 Read the project to understand:
-- Tech stack (check package.json, go.mod, pyproject.toml, etc.)
+- Tech stack (check package.json, go.mod, pyproject.toml, pom.xml, build.gradle/build.gradle.kts, etc.)
 - Existing conventions (linters, test frameworks, CI)
 - Architecture patterns in use
+
+### Java/Spring Boot Stack Detection
+
+When Java/Spring Boot is present, also detect and record:
+- Build tool: Maven (`pom.xml`) or Gradle (`build.gradle`, `build.gradle.kts`).
+- JDK version from toolchains, compiler config, `sourceCompatibility`, `targetCompatibility`, `.java-version`, `.sdkmanrc`, Dockerfile, or CI.
+- Spring Boot version from `spring-boot-starter-parent`, `spring-boot-dependencies` BOM, `org.springframework.boot` plugin, or version properties.
+- Module layout: phase 1 supports single-module projects. If multi-module is detected, warn and ask for the main Spring Boot module before continuing in limited mode.
+- Backend skill: recommend/apply `springboot-backend` when Spring Boot is detected.
+
+If JDK or Spring Boot version cannot be detected, record it as `unknown` and report that the user must be asked before implementation starts.
 
 ### Step 2: Detect Testing Capabilities
 
@@ -57,6 +68,8 @@ Detect testing capabilities:
 │   ├── package.json → scripts.test (what command it runs)
 │   ├── pyproject.toml / pytest.ini / setup.cfg → pytest
 │   ├── go.mod → go test (built-in)
+│   ├── pom.xml → Maven Surefire/Failsafe, JaCoCo, Spring Boot/JUnit/Mockito/Testcontainers
+│   ├── build.gradle(.kts) → Gradle test/integrationTest, JaCoCo, Spring Boot/JUnit/Mockito/Testcontainers
 │   ├── Cargo.toml → cargo test (built-in)
 │   ├── Makefile → make test
 │   └── Result: {framework name, command} or NOT FOUND
@@ -67,6 +80,7 @@ Detect testing capabilities:
 │   │   ├── JS/TS: @testing-library/* in dependencies
 │   │   ├── Python: pytest + httpx/requests-mock/factory-boy
 │   │   ├── Go: net/http/httptest (built-in)
+│   │   ├── Java/Spring Boot: @WebMvcTest, @DataJpaTest, @SpringBootTest, Testcontainers
 │   │   ├── .NET: xUnit/NUnit + WebApplicationFactory
 │   │   └── Result: AVAILABLE or NOT INSTALLED
 │   ├── E2E:
@@ -80,6 +94,7 @@ Detect testing capabilities:
 │   ├── JS/TS: vitest --coverage, jest --coverage, c8, istanbul/nyc
 │   ├── Python: coverage.py, pytest-cov
 │   ├── Go: go test -cover (built-in)
+│   ├── Java/Spring Boot: JaCoCo via Maven/Gradle
 │   ├── .NET: coverlet
 │   └── Result: {command} or NOT AVAILABLE
 │

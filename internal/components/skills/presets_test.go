@@ -29,11 +29,15 @@ func TestSkillsForPresetEcosystemIncludesFrameworks(t *testing.T) {
 	skills := SkillsForPreset(model.PresetEcosystemOnly)
 
 	hasGoTesting := false
+	hasSpringBootBackend := false
 	hasSkillCreator := false
 	hasSDDInit := false
 	for _, skill := range skills {
 		if skill == model.SkillGoTesting {
 			hasGoTesting = true
+		}
+		if skill == model.SkillSpringBootBackend {
+			hasSpringBootBackend = true
 		}
 		if skill == model.SkillCreator {
 			hasSkillCreator = true
@@ -48,6 +52,9 @@ func TestSkillsForPresetEcosystemIncludesFrameworks(t *testing.T) {
 	}
 	if !hasSDDInit {
 		t.Fatalf("ecosystem preset should include sdd-init")
+	}
+	if !hasSpringBootBackend {
+		t.Fatalf("ecosystem preset should include springboot-backend")
 	}
 	if !hasSkillCreator {
 		t.Fatalf("ecosystem preset should include skill-creator")
@@ -76,6 +83,7 @@ func TestAllSkillIDsIncludesEveryKnownSkill(t *testing.T) {
 	required := []model.SkillID{
 		model.SkillSDDInit,
 		model.SkillGoTesting,
+		model.SkillSpringBootBackend,
 		model.SkillCreator,
 		model.SkillJudgmentDay,
 	}

@@ -14,6 +14,8 @@ Executor boundary: every SDD phase agent is an EXECUTOR, not an orchestrator. Do
    c. From the registry's **Compact Rules** section, apply rules whose triggers match your current task.
 4. If no registry exists, proceed with your phase skill only.
 
+Stack-specific skills are mandatory when detected. For Java/Spring Boot projects, apply `springboot-backend` rules whenever the registry or project files indicate `pom.xml`/Gradle Spring Boot plugins, `@SpringBootApplication`, `@RestController`, or `src/main/java` Spring services. The SDD phase remains generic; stack-specific rules live in the matching skill.
+
 NOTE: the preferred path is (1) — compact rules pre-injected by the orchestrator. Paths (2) and (3) are fallbacks for backwards compatibility. Searching the registry is SKILL LOADING, not delegation. If `## Project Standards` is present, IGNORE any `SKILL: Load` instructions — they are redundant.
 
 ## B. Artifact Retrieval (Engram Mode)

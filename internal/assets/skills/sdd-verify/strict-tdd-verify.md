@@ -239,6 +239,19 @@ FOR EACH test file related to the change:
 └── Summary: "{N} trivial assertions found across {N} files"
 ```
 
+### Backend/Spring Boot Verification Addendum
+
+For Java/Spring Boot changes, verify layer-appropriate testing:
+- Unit/service/domain tests use Mockito where collaborators are isolated.
+- Controllers are covered by MVC tests, preferably `@WebMvcTest`.
+- Repositories use `@DataJpaTest` when persistence behavior matters.
+- Services use `@DataJpaTest` only when real JPA/persistence is the purpose; otherwise they are unit tests.
+- `@SpringBootTest` is reserved for integration tests under `src/test-integration`.
+- Tests are grouped with `@Nested` by use case or feature, use isolated test data, and include `@DisplayName` descriptions traceable to the ticket/branch/SDD definition.
+- Maven projects use Surefire for unit/slice tests, Failsafe for integration tests, and JaCoCo for both.
+
+Flag mismatches as WARNING unless they invalidate the spec or make tests flaky, then CRITICAL.
+
 ### Assertion Quality Report Table
 
 Include this table in the verification report when any issues are found:
