@@ -13,7 +13,7 @@
 | Skills | `skills` | Curated coding skill library |
 | Context7 | `context7` | MCP server for live framework/library documentation |
 | Persona | `persona` | Managed Gentleman/neutral persona injection, or unmanaged custom persona mode |
-| Permissions | `permissions` | Security-first defaults and guardrails |
+| Permissions | `permissions` | Security-first defaults and guardrails. Applied to Claude Code and OpenCode (the two adapters with permissions overlay support). Default sensitive-paths deny list: `~/.ssh/*`, `~/.ssh/**/*`, `**/*.pem`, `**/*.key`, `**/.env*`, `~/.credentials/*`, `~/.aws/credentials`, `~/.config/gh/hosts.yml`, `~/Library/Keychains/*`, `**/secrets/*`, `**/*.p12`, `**/*.pfx` |
 | GGA | `gga` | Gentleman Guardian Angel — AI provider switcher |
 | Theme | `theme` | Gentleman Kanagawa theme overlay |
 
@@ -36,7 +36,7 @@ gga install
 
 ### Included Skills (installed by gentle-ai)
 
-14 skill files organized by category, embedded in the binary and injected into your agent's configuration:
+20 skill files organized by category, embedded in the binary and injected into your agent's configuration:
 
 #### SDD (Spec-Driven Development)
 
@@ -51,6 +51,7 @@ gga install
 | SDD Apply | `sdd-apply` | Implement tasks following specs and design |
 | SDD Verify | `sdd-verify` | Validate implementation matches specs |
 | SDD Archive | `sdd-archive` | Sync delta specs to main specs and archive |
+| SDD Onboard | `sdd-onboard` | Guided end-to-end SDD walkthrough on the real codebase |
 | Judgment Day | `judgment-day` | Parallel adversarial review — two independent judges review the same target |
 
 #### Foundation
@@ -61,8 +62,13 @@ gga install
 | Skill Creator | `skill-creator` | Create new AI agent skills following the Agent Skills spec |
 | Branch & PR | `branch-pr` | PR creation workflow with conventional commits, branch naming, and issue-first enforcement |
 | Issue Creation | `issue-creation` | Issue filing workflow with bug report and feature request templates |
+| Skill Registry | `skill-registry` | Build an index of installed skills with triggers, scopes, and exact `SKILL.md` paths |
+| Chained PR | `chained-pr` | Plan and create reviewable stacked/chained pull requests |
+| Cognitive Doc Design | `cognitive-doc-design` | Write docs that reduce review and onboarding cognitive load |
+| Comment Writer | `comment-writer` | Draft warm, direct collaboration comments and review replies |
+| Work Unit Commits | `work-unit-commits` | Split implementation into reviewable work units |
 
-These foundation skills are installed by default with both `full-gentleman` and `ecosystem-only` presets.
+These foundation skills are installed by default with both the `full-gentleman` (Dev Stack + Polish) and `ecosystem-only` (Dev Stack) presets.
 
 ### Coding Skills (separate repository)
 
@@ -74,7 +80,9 @@ For framework-specific skills (React 19, Angular, TypeScript, Tailwind 4, Zod 4,
 
 | Preset | ID | What's Included |
 |--------|-----|-----------------|
-| Full Gentleman | `full-gentleman` | All components (Engram + SDD + Skills + Context7 + GGA + Persona + Permissions + Theme) + all skills + gentleman persona |
-| Ecosystem Only | `ecosystem-only` | Core components (Engram + SDD + Skills + Context7 + GGA) + all skills + gentleman persona |
-| Minimal | `minimal` | Engram + SDD skills only |
+| Dev Stack + Polish | `full-gentleman` | All components (Engram + SDD + Skills + Context7 + GGA + Permissions + Theme) + all skills |
+| Dev Stack | `ecosystem-only` | Core components (Engram + SDD + Skills + Context7 + GGA) + all skills |
+| Memory Only | `minimal` | Engram + SDD skills only |
 | Custom | `custom` | You choose components and skills manually while keeping any existing persona/settings unmanaged |
+
+Persona is selected separately on the Persona screen and applied independently of the preset.

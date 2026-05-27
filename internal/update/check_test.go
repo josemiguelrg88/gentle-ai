@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/gentleman-programming/gentle-ai/internal/system"
@@ -44,7 +46,7 @@ func TestDetectInstalledVersion(t *testing.T) {
 				return "/usr/local/bin/engram", nil
 			},
 			execCommandFn: func(name string, args ...string) *exec.Cmd {
-				return exec.Command("echo", "engram v0.3.2")
+				return mockCmd("echo", "engram v0.3.2")
 			},
 			wantVersion: "0.3.2",
 		},
@@ -55,7 +57,7 @@ func TestDetectInstalledVersion(t *testing.T) {
 				return "/usr/local/bin/engram", nil
 			},
 			execCommandFn: func(name string, args ...string) *exec.Cmd {
-				return exec.Command("echo", "engram dev")
+				return mockCmd("echo", "engram dev")
 			},
 			wantVersion: "dev",
 		},
@@ -74,7 +76,7 @@ func TestDetectInstalledVersion(t *testing.T) {
 				return "/usr/local/bin/engram", nil
 			},
 			execCommandFn: func(name string, args ...string) *exec.Cmd {
-				return exec.Command("false") // exits with error
+				return mockCmd("false") // exits with error
 			},
 			wantVersion: "",
 		},
@@ -85,7 +87,7 @@ func TestDetectInstalledVersion(t *testing.T) {
 				return "/usr/local/bin/gga", nil
 			},
 			execCommandFn: func(name string, args ...string) *exec.Cmd {
-				return exec.Command("echo", "gga - no version info")
+				return mockCmd("echo", "gga - no version info")
 			},
 			wantVersion: "",
 		},
@@ -136,6 +138,74 @@ func TestDetectInstalledVersionFromOpenCodeNodeModulePackageJSON(t *testing.T) {
 	tool := ToolInfo{Name: "sdd-engram-plugin", NpmPackage: "opencode-sdd-engram-manage"}
 	if got := detectInstalledVersion(context.Background(), tool, "dev"); got != "1.1.7" {
 		t.Fatalf("detectInstalledVersion() = %q, want 1.1.7", got)
+	}
+}
+
+func TestDetectInstalledVersionFromOpenCodePackageJSONDependency(t *testing.T) {
+	home := t.TempDir()
+	opencodeDir := filepath.Join(home, ".config", "opencode")
+	if err := os.MkdirAll(opencodeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(opencodeDir, "package.json"), []byte(`{"dependencies":{"opencode-sdd-engram-manage":"^1.3.3"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	origHome := userHomeDir
+	userHomeDir = func() (string, error) { return home, nil }
+	t.Cleanup(func() { userHomeDir = origHome })
+
+	tool := ToolInfo{Name: "sdd-engram-plugin", NpmPackage: "opencode-sdd-engram-manage"}
+	if got := detectInstalledVersion(context.Background(), tool, "dev"); got != "1.3.3" {
+		t.Fatalf("detectInstalledVersion() = %q, want 1.3.3", got)
+	}
+}
+
+func TestCheckSingleToolOpenCodePluginRegisteredNotMaterialized(t *testing.T) {
+	home := t.TempDir()
+	opencodeDir := filepath.Join(home, ".config", "opencode")
+	if err := os.MkdirAll(opencodeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(opencodeDir, "tui.json"), []byte(`{"plugin":["opencode-sdd-engram-manage"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	origHome := userHomeDir
+	origClient := httpClient
+	t.Cleanup(func() {
+		userHomeDir = origHome
+		httpClient = origClient
+	})
+	userHomeDir = func() (string, error) { return home, nil }
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(githubRelease{TagName: "v1.2.3", HTMLURL: "https://example.test/release"})
+	}))
+	defer server.Close()
+	httpClient = server.Client()
+	httpClient.Transport = &testTransport{server: server}
+
+	tool := ToolInfo{
+		Name:          "opencode-sdd-engram-manage",
+		Owner:         "owner",
+		Repo:          "repo",
+		InstallMethod: InstallOpenCodePlugin,
+		NpmPackage:    "opencode-sdd-engram-manage",
+	}
+
+	result := checkSingleTool(context.Background(), tool, "dev", system.PlatformProfile{})
+	if result.Status != RegisteredNotMaterialized {
+		t.Fatalf("status = %q, want %q", result.Status, RegisteredNotMaterialized)
+	}
+	if result.InstalledVersion != "" {
+		t.Fatalf("InstalledVersion = %q, want empty while package.json is missing", result.InstalledVersion)
+	}
+	if !strings.Contains(strings.ToLower(result.UpdateHint), "restart or reload opencode") {
+		t.Fatalf("UpdateHint should tell the user to restart/reload OpenCode, got %q", result.UpdateHint)
+	}
+	if !strings.Contains(result.UpdateHint, "peer dependency") {
+		t.Fatalf("UpdateHint should mention checking logs for dependency errors, got %q", result.UpdateHint)
 	}
 }
 
@@ -227,6 +297,76 @@ func TestFetchLatestRelease(t *testing.T) {
 				t.Fatalf("HTMLURL = %q, want %q", release.HTMLURL, tc.wantURL)
 			}
 		})
+	}
+}
+
+func TestFetchLatestReleaseMatchingPatternSkipsPiChannel(t *testing.T) {
+	var serverURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/Gentleman-Programming/engram/releases" {
+			t.Fatalf("unexpected path: %s", r.URL.String())
+		}
+		if r.URL.Query().Get("per_page") != "100" {
+			t.Fatalf("per_page = %q, want 100", r.URL.Query().Get("per_page"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Query().Get("page") {
+		case "":
+			w.Header().Set("Link", fmt.Sprintf(`<%s/repos/Gentleman-Programming/engram/releases?per_page=100&page=2>; rel="next"`, serverURL))
+			json.NewEncoder(w).Encode([]githubRelease{
+				{TagName: "pi-v0.1.7", HTMLURL: "https://github.com/Gentleman-Programming/engram/releases/tag/pi-v0.1.7"},
+			})
+		case "2":
+			json.NewEncoder(w).Encode([]githubRelease{
+				{TagName: "v1.15.13", HTMLURL: "https://github.com/Gentleman-Programming/engram/releases/tag/v1.15.13"},
+			})
+		default:
+			t.Fatalf("unexpected page: %s", r.URL.Query().Get("page"))
+		}
+	}))
+	serverURL = server.URL
+	defer server.Close()
+
+	origClient := httpClient
+	t.Cleanup(func() { httpClient = origClient })
+	httpClient = server.Client()
+	httpClient.Transport = &testTransport{server: server}
+
+	release, err := fetchLatestReleaseMatchingPattern(context.Background(), "Gentleman-Programming", "engram", `^v[0-9]+\.[0-9]+\.[0-9]+$`)
+	if err != nil {
+		t.Fatalf("fetchLatestReleaseMatchingPattern() error = %v", err)
+	}
+	if release.TagName != "v1.15.13" {
+		t.Fatalf("TagName = %q, want v1.15.13", release.TagName)
+	}
+}
+
+func TestFetchLatestReleaseMatchingPatternRejectsPaginationLoop(t *testing.T) {
+	var serverURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Link", fmt.Sprintf(`<%s/repos/Gentleman-Programming/engram/releases?per_page=100>; rel="next"`, serverURL))
+		json.NewEncoder(w).Encode([]githubRelease{{TagName: "pi-v0.1.7"}})
+	}))
+	serverURL = server.URL
+	defer server.Close()
+
+	origClient := httpClient
+	t.Cleanup(func() { httpClient = origClient })
+	httpClient = server.Client()
+	httpClient.Transport = &testTransport{server: server}
+
+	_, err := fetchLatestReleaseMatchingPattern(context.Background(), "Gentleman-Programming", "engram", `^v[0-9]+\.[0-9]+\.[0-9]+$`)
+	if err == nil || !strings.Contains(err.Error(), "pagination loop detected") {
+		t.Fatalf("expected pagination loop error, got %v", err)
+	}
+}
+
+func TestNextGitHubPageFindsRelAfterOtherParameters(t *testing.T) {
+	got := nextGitHubPage(`<https://api.github.com/repos/o/r/releases?per_page=100&page=2>; type="application/json"; rel="next"`)
+	want := "https://api.github.com/repos/o/r/releases?per_page=100&page=2"
+	if got != want {
+		t.Fatalf("nextGitHubPage() = %q, want %q", got, want)
 	}
 }
 
@@ -374,9 +514,9 @@ func TestCheckAll(t *testing.T) {
 	}
 	execCommand = func(name string, args ...string) *exec.Cmd {
 		if name == "engram" {
-			return exec.Command("echo", "engram v0.3.2")
+			return mockCmd("echo", "engram v0.3.2")
 		}
-		return exec.Command("false")
+		return mockCmd("false")
 	}
 	pluginHome := t.TempDir()
 	userHomeDir = func() (string, error) { return pluginHome, nil }
@@ -398,6 +538,52 @@ func TestCheckAll(t *testing.T) {
 	assertResult(t, results[2], "gga", NotInstalled, "", "2.0.0")
 	assertResult(t, results[3], "opencode-subagent-statusline", NotInstalled, "", "0.4.0")
 	assertResult(t, results[4], "opencode-sdd-engram-manage", NotInstalled, "", "1.1.7")
+}
+
+func TestCheckSingleTool_EngramUsesBinaryReleaseChannel(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/repos/Gentleman-Programming/engram/releases":
+			json.NewEncoder(w).Encode([]githubRelease{
+				{TagName: "pi-v0.1.7", HTMLURL: "https://github.com/Gentleman-Programming/engram/releases/tag/pi-v0.1.7"},
+				{TagName: "v1.15.13", HTMLURL: "https://github.com/Gentleman-Programming/engram/releases/tag/v1.15.13"},
+			})
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.String())
+		}
+	}))
+	defer server.Close()
+
+	origClient := httpClient
+	origLookPath := lookPath
+	origExecCommand := execCommand
+	t.Cleanup(func() {
+		httpClient = origClient
+		lookPath = origLookPath
+		execCommand = origExecCommand
+	})
+
+	httpClient = server.Client()
+	httpClient.Transport = &testTransport{server: server}
+	lookPath = func(name string) (string, error) {
+		if name == "engram" {
+			return "/usr/local/bin/engram", nil
+		}
+		return "", fmt.Errorf("not found")
+	}
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		if name == "engram" {
+			return exec.Command("echo", "engram 1.15.13")
+		}
+		return exec.Command("false")
+	}
+
+	result := checkSingleTool(context.Background(), Tools[1], "dev", system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true})
+	assertResult(t, result, "engram", UpToDate, "1.15.13", "1.15.13")
+	if result.ReleaseURL != "https://github.com/Gentleman-Programming/engram/releases/tag/v1.15.13" {
+		t.Fatalf("ReleaseURL = %q, want binary channel release", result.ReleaseURL)
+	}
 }
 
 func TestCheckAll_NetworkError(t *testing.T) {
@@ -427,7 +613,7 @@ func TestCheckAll_NetworkError(t *testing.T) {
 	httpClient.Transport = &testTransport{server: server}
 
 	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
-	execCommand = func(name string, args ...string) *exec.Cmd { return exec.Command("false") }
+	execCommand = func(name string, args ...string) *exec.Cmd { return mockCmd("false") }
 
 	profile := system.PlatformProfile{OS: "linux", LinuxDistro: "ubuntu", PackageManager: "apt", Supported: true}
 	results := CheckAll(context.Background(), "1.0.0", profile)
@@ -473,7 +659,7 @@ func TestCheckFiltered_FetchErrorPreservesCheckFailedForMissingTool(t *testing.T
 	httpClient = server.Client()
 	httpClient.Transport = &testTransport{server: server}
 	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
-	execCommand = func(name string, args ...string) *exec.Cmd { return exec.Command("false") }
+	execCommand = func(name string, args ...string) *exec.Cmd { return mockCmd("false") }
 
 	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true}
 	results := CheckFiltered(context.Background(), "1.0.0", profile, []string{"engram"})
@@ -727,6 +913,9 @@ func TestRegistryContents(t *testing.T) {
 	if Tools[1].DetectCmd == nil {
 		t.Fatalf("engram DetectCmd should not be nil")
 	}
+	if Tools[1].ReleaseTagPattern != `^v[0-9]+\.[0-9]+\.[0-9]+$` {
+		t.Fatalf("engram ReleaseTagPattern = %q, want binary v* channel pattern", Tools[1].ReleaseTagPattern)
+	}
 	if Tools[2].DetectCmd == nil {
 		t.Fatalf("gga DetectCmd should not be nil")
 	}
@@ -765,7 +954,7 @@ func TestCheckAll_DevVersion(t *testing.T) {
 	Tools = []ToolInfo{Tools[0]}
 
 	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
-	execCommand = func(name string, args ...string) *exec.Cmd { return exec.Command("false") }
+	execCommand = func(name string, args ...string) *exec.Cmd { return mockCmd("false") }
 
 	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true}
 	results := CheckAll(context.Background(), "dev", profile)
@@ -811,9 +1000,9 @@ func TestCheckFiltered_SubsetOfTools(t *testing.T) {
 	}
 	execCommand = func(name string, args ...string) *exec.Cmd {
 		if name == "engram" {
-			return exec.Command("echo", "engram v0.9.9")
+			return mockCmd("echo", "engram v0.9.9")
 		}
-		return exec.Command("false")
+		return mockCmd("false")
 	}
 
 	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true}
@@ -849,7 +1038,7 @@ func TestCheckFiltered_EmptyFilter(t *testing.T) {
 	httpClient = server.Client()
 	httpClient.Transport = &testTransport{server: server}
 	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
-	execCommand = func(name string, args ...string) *exec.Cmd { return exec.Command("false") }
+	execCommand = func(name string, args ...string) *exec.Cmd { return mockCmd("false") }
 
 	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true}
 
@@ -882,7 +1071,7 @@ func TestCheckFiltered_UnknownToolIgnored(t *testing.T) {
 	httpClient = server.Client()
 	httpClient.Transport = &testTransport{server: server}
 	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
-	execCommand = func(name string, args ...string) *exec.Cmd { return exec.Command("false") }
+	execCommand = func(name string, args ...string) *exec.Cmd { return mockCmd("false") }
 
 	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true}
 
@@ -921,7 +1110,7 @@ func TestCheckFiltered_DevBuildSemanticsForGentleAI(t *testing.T) {
 	httpClient = server.Client()
 	httpClient.Transport = &testTransport{server: server}
 	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
-	execCommand = func(name string, args ...string) *exec.Cmd { return exec.Command("false") }
+	execCommand = func(name string, args ...string) *exec.Cmd { return mockCmd("false") }
 	Tools = []ToolInfo{Tools[0]} // gentle-ai only
 
 	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true}
@@ -986,9 +1175,9 @@ func TestCheckFiltered_DevBuildSkipNotEligible(t *testing.T) {
 	}
 	execCommand = func(name string, args ...string) *exec.Cmd {
 		if name == "engram" {
-			return exec.Command("echo", "engram v1.0.0")
+			return mockCmd("echo", "engram v1.0.0")
 		}
-		return exec.Command("false")
+		return mockCmd("false")
 	}
 	// Only gentle-ai and engram for this test
 	Tools = []ToolInfo{Tools[0], Tools[1]}
@@ -1054,9 +1243,9 @@ func TestNoUpdatesPath(t *testing.T) {
 	}
 	execCommand = func(name string, args ...string) *exec.Cmd {
 		if name == "engram" {
-			return exec.Command("echo", "engram v0.3.2")
+			return mockCmd("echo", "engram v0.3.2")
 		}
-		return exec.Command("false")
+		return mockCmd("false")
 	}
 	// Only engram and gga for this test (skip gentle-ai to avoid dev-build behavior)
 	Tools = []ToolInfo{Tools[1], Tools[2]}
@@ -1178,4 +1367,19 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+func mockCmd(name string, args ...string) *exec.Cmd {
+	if runtime.GOOS == "windows" {
+		if name == "echo" {
+			return exec.Command("cmd", "/c", "echo "+strings.Join(args, " "))
+		}
+		if name == "true" {
+			return exec.Command("cmd", "/c", "exit 0")
+		}
+		if name == "false" {
+			return exec.Command("cmd", "/c", "exit 1")
+		}
+	}
+	return exec.Command(name, args...)
 }

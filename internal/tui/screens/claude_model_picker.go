@@ -36,7 +36,6 @@ var claudePresetOrder = []ClaudeModelPreset{
 
 // claudePhases is the ordered list of model-assignment keys shown in custom mode.
 var claudePhases = []string{
-	"orchestrator",
 	"sdd-explore",
 	"sdd-propose",
 	"sdd-spec",
@@ -50,16 +49,15 @@ var claudePhases = []string{
 
 // claudePhaseLabels are the human-readable labels for each SDD phase.
 var claudePhaseLabels = map[string]string{
-	"orchestrator": "Orchestrator",
-	"sdd-explore":  "Explore",
-	"sdd-propose":  "Propose",
-	"sdd-spec":     "Spec",
-	"sdd-design":   "Design",
-	"sdd-tasks":    "Tasks",
-	"sdd-apply":    "Apply",
-	"sdd-verify":   "Verify",
-	"sdd-archive":  "Archive",
-	"default":      "General delegation",
+	"sdd-explore": "Explore",
+	"sdd-propose": "Propose",
+	"sdd-spec":    "Spec",
+	"sdd-design":  "Design",
+	"sdd-tasks":   "Tasks",
+	"sdd-apply":   "Apply",
+	"sdd-verify":  "Verify",
+	"sdd-archive": "Archive",
+	"default":     "General delegation",
 }
 
 // claudeAliasOrder defines the cycling order when pressing Enter on a phase row.
@@ -90,6 +88,52 @@ func NewClaudeModelPickerState() ClaudeModelPickerState {
 		CustomAssignments: model.ClaudeModelPresetBalanced(),
 		InCustomMode:      false,
 	}
+}
+
+// NewClaudeModelPickerStateFromAssignments returns the picker state initialized
+// from previously persisted Claude model assignments. If the assignments match
+// a known preset (Balanced/Performance/Economy), that preset is preselected.
+// Otherwise the picker opens in Custom mode preserving the user's exact assignments.
+// When assignments is empty or nil, it falls back to the balanced default.
+func NewClaudeModelPickerStateFromAssignments(assignments map[string]model.ClaudeModelAlias) ClaudeModelPickerState {
+	if len(assignments) == 0 {
+		return NewClaudeModelPickerState()
+	}
+	for preset, constructor := range presetConstructors {
+		if assignmentsEqual(constructor(), assignments) {
+			return ClaudeModelPickerState{
+				Preset:            preset,
+				CustomAssignments: copyAssignments(assignments),
+				InCustomMode:      false,
+			}
+		}
+	}
+	// Doesn't match any built-in preset → custom.
+	return ClaudeModelPickerState{
+		Preset:            ClaudePresetCustom,
+		CustomAssignments: copyAssignments(assignments),
+		InCustomMode:      false,
+	}
+}
+
+func assignmentsEqual(a, b map[string]model.ClaudeModelAlias) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+func copyAssignments(m map[string]model.ClaudeModelAlias) map[string]model.ClaudeModelAlias {
+	out := make(map[string]model.ClaudeModelAlias, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
 
 // presetConstructors maps preset IDs to their constructor functions.
@@ -210,6 +254,8 @@ func renderPresetList(state ClaudeModelPickerState, cursor int) string {
 	var b strings.Builder
 
 	b.WriteString(styles.TitleStyle.Render("Claude Model Assignments"))
+	b.WriteString("\n")
+	b.WriteString(styles.SubtextStyle.Render("Current: " + string(state.Preset)))
 	b.WriteString("\n\n")
 	b.WriteString(styles.SubtextStyle.Render("Choose how Claude models are assigned to each SDD phase:"))
 	b.WriteString("\n\n")

@@ -10,6 +10,7 @@ import (
 
 	"github.com/gentleman-programming/gentle-ai/internal/model"
 	"github.com/gentleman-programming/gentle-ai/internal/system"
+	"github.com/gentleman-programming/gentle-ai/internal/versions"
 )
 
 // cmdLookPath, osStat, osGetenv, and cmdGoVersion are package-level vars for testability.
@@ -55,21 +56,26 @@ func (profileResolver) ResolveAgentInstall(profile system.PlatformProfile, agent
 // resolveClaudeCodeInstall returns the npm install command sequence for Claude Code.
 // On Linux with system npm, sudo is required. With nvm/fnm/volta, it is not.
 // On Windows and macOS, sudo is never needed.
+//
+// --ignore-scripts blocks postinstall hooks, the primary supply-chain attack vector
+// for npm packages. The version is pinned to avoid pulling a tampered "latest" tag.
 func resolveClaudeCodeInstall(profile system.PlatformProfile) CommandSequence {
+	pkg := "@anthropic-ai/claude-code@" + versions.ClaudeCode
 	if profile.OS == "linux" && !profile.NpmWritable {
-		return CommandSequence{{"sudo", "npm", "install", "-g", "@anthropic-ai/claude-code"}}
+		return CommandSequence{{"sudo", "npm", "install", "-g", "--ignore-scripts", pkg}}
 	}
-	return CommandSequence{{"npm", "install", "-g", "@anthropic-ai/claude-code"}}
+	return CommandSequence{{"npm", "install", "-g", "--ignore-scripts", pkg}}
 }
 
 // resolveKilocodeInstall returns the npm install command sequence for Kilocode.
 // On Linux with system npm, sudo is required. With nvm/fnm/volta, it is not.
 // On Windows and macOS, sudo is never needed.
 func resolveKilocodeInstall(profile system.PlatformProfile) CommandSequence {
+	pkg := "@kilocode/cli@" + versions.Kilocode
 	if profile.OS == "linux" && !profile.NpmWritable {
-		return CommandSequence{{"sudo", "npm", "install", "-g", "@kilocode/cli"}}
+		return CommandSequence{{"sudo", "npm", "install", "-g", "--ignore-scripts", pkg}}
 	}
-	return CommandSequence{{"npm", "install", "-g", "@kilocode/cli"}}
+	return CommandSequence{{"npm", "install", "-g", "--ignore-scripts", pkg}}
 }
 
 // resolveKimiInstall returns the official Kimi install command sequence.
@@ -92,9 +98,19 @@ func ValidateAgentInstallPreflight(profile system.PlatformProfile, agent model.A
 	switch agent {
 	case model.AgentKimi:
 		return validateKimiInstallPreflight(profile)
+	case model.AgentPi:
+		return validatePiInstallPreflight()
 	default:
 		return nil
 	}
+}
+
+func validatePiInstallPreflight() error {
+	if _, err := cmdLookPath("pi"); err != nil {
+		return fmt.Errorf("Pi requires the `pi` executable in PATH before installing Gentle AI Pi packages")
+	}
+
+	return nil
 }
 
 func validateKimiInstallPreflight(profile system.PlatformProfile) error {
@@ -179,13 +195,14 @@ func resolveOpenCodeInstall(profile system.PlatformProfile) (CommandSequence, er
 			{"brew", "install", "anomalyco/tap/opencode"},
 		}, nil
 	case "apt", "pacman", "dnf":
+		pkg := "opencode-ai@" + versions.OpenCode
 		if profile.NpmWritable {
-			return CommandSequence{{"npm", "install", "-g", "opencode-ai"}}, nil
+			return CommandSequence{{"npm", "install", "-g", "--ignore-scripts", pkg}}, nil
 		}
-		return CommandSequence{{"sudo", "npm", "install", "-g", "opencode-ai"}}, nil
+		return CommandSequence{{"sudo", "npm", "install", "-g", "--ignore-scripts", pkg}}, nil
 	case "winget":
 		// On Windows, npm global installs do not require sudo.
-		return CommandSequence{{"npm", "install", "-g", "opencode-ai"}}, nil
+		return CommandSequence{{"npm", "install", "-g", "--ignore-scripts", "opencode-ai@" + versions.OpenCode}}, nil
 	default:
 		return nil, fmt.Errorf(
 			"unsupported platform for opencode: os=%q distro=%q pm=%q",

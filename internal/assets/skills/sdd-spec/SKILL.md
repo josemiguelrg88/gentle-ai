@@ -1,13 +1,24 @@
 ---
 name: sdd-spec
-description: >
-  Write specifications with requirements and scenarios (delta specs for changes).
-  Trigger: When the orchestrator launches you to write or update specs for a change.
+description: "Write SDD delta specs with requirements and scenarios. Trigger: orchestrator launches spec work for a change."
+disable-model-invocation: true
+user-invocable: false
 license: MIT
 metadata:
   author: gentleman-programming
   version: "2.0"
+  delegate_only: true
 ---
+
+> **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
+> the ORCHESTRATOR — STOP. Do NOT execute these instructions inline. Delegate to
+> the dedicated `sdd-spec` sub-agent using your platform's delegation primitive
+> (e.g., `task(...)`, sub-agent invocation, etc.). This skill is for EXECUTORS
+> only.
+
+## Executor Override
+
+If you ARE the `sdd-spec` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor — execute.
 
 ## Purpose
 

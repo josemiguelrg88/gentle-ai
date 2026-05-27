@@ -7,8 +7,12 @@ const (
 	UpToDate        UpdateStatus = "up-to-date"
 	UpdateAvailable UpdateStatus = "update-available"
 	NotInstalled    UpdateStatus = "not-installed"
-	VersionUnknown  UpdateStatus = "version-unknown"
-	CheckFailed     UpdateStatus = "check-failed"
+	// RegisteredNotMaterialized means an OpenCode community plugin is listed in
+	// ~/.config/opencode/tui.json, but OpenCode has not yet materialized it under
+	// ~/.config/opencode/node_modules/<pkg>/package.json.
+	RegisteredNotMaterialized UpdateStatus = "registered-not-materialized"
+	VersionUnknown            UpdateStatus = "version-unknown"
+	CheckFailed               UpdateStatus = "check-failed"
 	// DevBuild is used when the installed version is the sentinel "dev" string,
 	// indicating a source-built binary. Such builds are not auto-targeted for upgrade.
 	DevBuild UpdateStatus = "dev-build"
@@ -33,14 +37,15 @@ const (
 
 // ToolInfo describes a managed tool that can be checked for updates.
 type ToolInfo struct {
-	Name          string        // human-readable name (e.g., "gentle-ai")
-	Owner         string        // GitHub repository owner
-	Repo          string        // GitHub repository name
-	DetectCmd     []string      // command to detect installed version; nil = use build var
-	VersionPrefix string        // prefix to strip from version output (e.g., "v")
-	InstallMethod InstallMethod // how this tool is installed (used by upgrade executor)
-	GoImportPath  string        // for go-install tools (e.g. "github.com/.../cmd/engram")
-	NpmPackage    string        // for OpenCode community plugins installed in ~/.config/opencode/node_modules
+	Name              string        // human-readable name (e.g., "gentle-ai")
+	Owner             string        // GitHub repository owner
+	Repo              string        // GitHub repository name
+	DetectCmd         []string      // command to detect installed version; nil = use build var
+	VersionPrefix     string        // prefix to strip from version output (e.g., "v")
+	ReleaseTagPattern string        // optional regexp for selecting the correct GitHub release channel
+	InstallMethod     InstallMethod // how this tool is installed (used by upgrade executor)
+	GoImportPath      string        // for go-install tools (e.g. "github.com/.../cmd/engram")
+	NpmPackage        string        // for OpenCode community plugins installed in ~/.config/opencode/node_modules
 }
 
 // UpdateResult holds the result of checking a single tool for updates.
